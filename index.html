@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NoiseMonitor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f8ff;
+      color: #222;
+      text-align: center;
+      padding: 40px;
+      transition: background 0.3s, color 0.3s;
+    }
+    h1 {
+      font-size: 2rem;
+    }
+    #status, #level, #timer, #badge, #fact {
+      margin-top: 20px;
+      font-size: 1.2rem;
+    }
+    #level {
+      font-size: 3rem;
+      font-weight: bold;
+    }
+    #chart {
+      width: 100%;
+      max-width: 600px;
+      height: 300px;
+      margin: 30px auto;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      margin-top: 20px;
+    }
+    .night-mode {
+      background: #1c1c1c;
+      color: #eee;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎧 NoiseMonitor</h1>
+  <p>This app measures sound levels using your microphone.</p>
+  <button onclick="startMonitor()">Allow Microphone</button>
+  <button onclick="toggleNightMode()">🌙 Toggle Night Mode</button>
+
+  <div id="status">Awaiting permission...</div>
+  <div id="level"></div>
+  <div id="timer"></div>
+  <canvas id="chart"></canvas>
+  <div id="fact"></div>
+  <div id="badge"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    let noiseData = [];
+    let chart;
+    let quietTime = 0, mediumTime = 0, loudTime = 0;
+    let totalTime = 0;
+    let badges = [];
+    let factList = [
+      "85 dB for long periods can damage hearing!",
+      "Rustling leaves are about 20 dB.",
+      "A whisper is 30 dB.",
+      "A normal convo is around 60 dB.",
+      "Rock concerts can go over 120 dB!"
+    ];
+
+    function startMonitor() {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          document.getElementById('status').textContent = "✅ Microphone access granted! Measuring noise...";
+
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const source = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          source.connect(analyser);
+
+          if (!chart) initChart();
+
+          function getAvgVol(arr) {
+            return arr.reduce((a, b) => a + b, 0) / arr.length;
+          }
+
+          function update() {
+            analyser.getByteFrequencyData(dataArray);
+            const volume = getAvgVol(dataArray);
+            const fakeDb = Math.round(volume);
+
+            document.getElementById('level').textContent = fakeDb + " dB";
+            updateColor(fakeDb);
+            updateChart(fakeDb);
+            updateTimer(fakeDb);
+            updateBadge();
+            updateFact();
+
+            requestAnimationFrame(update);
+          }
+
+          update();
+        })
+        .catch(err => {
+          document.getElementById('status').textContent = "❌ Microphone access denied. This app won't work without it.";
+        });
+    }
+
+    function updateColor(db) {
+      const level = document.getElementById('level');
+      if (db < 30) level.style.color = "green";
+      else if (db < 60) level.style.color = "orange";
+      else level.style.color = "red";
+    }
+
+    function initChart() {
+      const ctx = document.getElementById('chart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Noise Level (dB)',
+            data: [],
+            borderColor: 'blue',
+            fill: false
+          }]
+        },
+        options: {
+          animation: false,
+          scales: { y: { min: 0, max: 100 } }
+        }
+      });
+    }
+
+    function updateChart(db) {
+      const now = new Date().toLocaleTimeString();
+      const data = chart.data;
+      data.labels.push(now);
+      data.datasets[0].data.push(db);
+      if (data.labels.length > 20) {
+        data.labels.shift();
+        data.datasets[0].data.shift();
+      }
+      chart.update();
+    }
+
+    function updateTimer(db) {
+      totalTime++;
+      if (db < 30) quietTime++;
+      else if (db < 60) mediumTime++;
+      else loudTime++;
+
+      document.getElementById('timer').textContent = `Quiet: ${quietTime}s | Medium: ${mediumTime}s | Loud: ${loudTime}s`;
+    }
+
+    function updateBadge() {
+      if (quietTime >= 60 && !badges.includes('🥇 Super Listener')) {
+        badges.push('🥇 Super Listener');
+      }
+      if (loudTime >= 10 && !badges.includes('🏆 Noise Buster')) {
+        badges.push('🏆 Noise Buster');
+      }
+      if (totalTime >= 180 && !badges.includes('🎖️ Peacekeeper')) {
+        badges.push('🎖️ Peacekeeper');
+      }
+      document.getElementById('badge').textContent = badges.join('  ');
+    }
+
+    function updateFact() {
+      if (totalTime % 30 === 0) {
+        const randomFact = factList[Math.floor(Math.random() * factList.length)];
+        document.getElementById('fact').textContent = "🔍 Fact: " + randomFact;
+      }
+    }
+
+    function toggleNightMode() {
+      document.body.classList.toggle('night-mode');
+    }
+  </script>
+</body>
+</html>
