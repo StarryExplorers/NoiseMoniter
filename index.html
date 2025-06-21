@@ -15,13 +15,14 @@
     h1 {
       font-size: 2rem;
     }
-    #status, #level, #timer, #badge, #fact {
+    #status, #level, #timer, #badge, #fact, #permission-screen {
       margin-top: 20px;
       font-size: 1.2rem;
     }
     #level {
       font-size: 3rem;
       font-weight: bold;
+      color: #008000;
     }
     #chart {
       width: 100%;
@@ -34,6 +35,9 @@
       font-size: 1rem;
       margin-top: 20px;
     }
+    .hidden {
+      display: none;
+    }
     .night-mode {
       background: #1c1c1c;
       color: #eee;
@@ -42,16 +46,18 @@
 </head>
 <body>
   <h1>🎧 NoiseMonitor</h1>
-  <p>This app measures sound levels using your microphone.</p>
-  <button onclick="startMonitor()">Allow Microphone</button>
-  <button onclick="toggleNightMode()">🌙 Toggle Night Mode</button>
+  <div id="permission-screen">
+    <p>This app needs microphone access to measure sound levels.</p>
+    <button onclick="requestMicPermission()">🎙️ Start NoiseMonitor</button>
+  </div>
 
-  <div id="status">Awaiting permission...</div>
-  <div id="level"></div>
-  <div id="timer"></div>
-  <canvas id="chart"></canvas>
-  <div id="fact"></div>
-  <div id="badge"></div>
+  <button class="hidden" id="nightToggle" onclick="toggleNightMode()">🌙 Toggle Night Mode</button>
+  <div id="status" class="hidden"></div>
+  <div id="level" class="hidden"></div>
+  <div id="timer" class="hidden"></div>
+  <canvas id="chart" class="hidden"></canvas>
+  <div id="fact" class="hidden"></div>
+  <div id="badge" class="hidden"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
@@ -68,44 +74,60 @@
       "Rock concerts can go over 120 dB!"
     ];
 
-    function startMonitor() {
+    function requestMicPermission() {
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
-          document.getElementById('status').textContent = "✅ Microphone access granted! Measuring noise...";
-
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const source = ctx.createMediaStreamSource(stream);
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 256;
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
-          source.connect(analyser);
-
-          if (!chart) initChart();
-
-          function getAvgVol(arr) {
-            return arr.reduce((a, b) => a + b, 0) / arr.length;
-          }
-
-          function update() {
-            analyser.getByteFrequencyData(dataArray);
-            const volume = getAvgVol(dataArray);
-            const fakeDb = Math.round(volume);
-
-            document.getElementById('level').textContent = fakeDb + " dB";
-            updateColor(fakeDb);
-            updateChart(fakeDb);
-            updateTimer(fakeDb);
-            updateBadge();
-            updateFact();
-
-            requestAnimationFrame(update);
-          }
-
-          update();
+          document.getElementById('permission-screen').classList.add('hidden');
+          showMainUI();
+          startMonitor(stream);
         })
         .catch(err => {
-          document.getElementById('status').textContent = "❌ Microphone access denied. This app won't work without it.";
+          document.getElementById('permission-screen').innerHTML = "<p>❌ Microphone access denied. NoiseMonitor won't work without it.</p>";
         });
+    }
+
+    function showMainUI() {
+      document.getElementById('status').classList.remove('hidden');
+      document.getElementById('level').classList.remove('hidden');
+      document.getElementById('timer').classList.remove('hidden');
+      document.getElementById('chart').classList.remove('hidden');
+      document.getElementById('fact').classList.remove('hidden');
+      document.getElementById('badge').classList.remove('hidden');
+      document.getElementById('nightToggle').classList.remove('hidden');
+    }
+
+    function startMonitor(stream) {
+      document.getElementById('status').textContent = "✅ Microphone access granted! Measuring noise...";
+
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      source.connect(analyser);
+
+      if (!chart) initChart();
+
+      function getAvgVol(arr) {
+        return arr.reduce((a, b) => a + b, 0) / arr.length;
+      }
+
+      function update() {
+        analyser.getByteFrequencyData(dataArray);
+        const volume = getAvgVol(dataArray);
+        const fakeDb = Math.round(volume);
+
+        document.getElementById('level').textContent = fakeDb + " dB";
+        updateColor(fakeDb);
+        updateChart(fakeDb);
+        updateTimer(fakeDb);
+        updateBadge();
+        updateFact();
+
+        requestAnimationFrame(update);
+      }
+
+      update();
     }
 
     function updateColor(db) {
